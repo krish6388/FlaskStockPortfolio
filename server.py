@@ -121,4 +121,4 @@ def download(exe_name):
 if __name__ == "__main__":
     print("Starting Flask-SocketIO server...")
     port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host="localhost", port=port, debug=False)
+    socketio.run(app, host="0.0.0.0", port=port, debug=False)
