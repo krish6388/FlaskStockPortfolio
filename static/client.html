@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Portfolio + Code Compiler</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+  <h2>📈 Live Stock Portfolio</h2>
+  <select id="stockDropdown">
+    <option value="AAPL">AAPL</option>
+    <option value="GOOG">GOOG</option>
+    <option value="TSLA">TSLA</option>
+    <option value="MSFT">MSFT</option>
+  </select>
+  <input type="number" id="stockQty" placeholder="Quantity" />
+  <button onclick="addToPortfolio()">Add to Portfolio</button>
+  <h4>Remove Stock</h4>
+  <select id="stockRemoveDropdown">
+    <option value="AAPL">AAPL</option>
+    <option value="GOOG">GOOG</option>
+    <option value="TSLA">TSLA</option>
+    <option value="MSFT">MSFT</option>
+  </select>
+  <input type="number" id="removeQty" placeholder="Quantity to Remove" />
+  <button onclick="removeFromPortfolio()">Remove from Portfolio</button>
+
+
+  <h3>Your Portfolio:</h3>
+  <table border="1">
+    <thead>
+      <tr><th>Stock</th><th>Qty</th><th>Price</th><th>Value</th></tr>
+    </thead>
+    <tbody id="portfolioTable"></tbody>
+    <tfoot>
+      <tr><td colspan="3"><b>Total:</b></td><td id="portfolioTotal">$0</td></tr>
+    </tfoot>
+  </table>
+
+  <h4>System Logs</h4>
+  <div id="logContainer" style="border: 1px solid #ccc; padding: 10px; max-height: 150px; overflow-y: auto; background: #f9f9f9;">
+  </div>
+
+  <hr />
+
+  <h2>💻 Python to .exe Generator</h2>
+  <textarea id="code" rows="10" cols="50" placeholder="Write your Python code here..."></textarea><br/>
+  <button onclick="generateCode()">Generate EXE</button>
+  <p id="status"></p>
+  <a id="downloadLink" style="display:none;" download>Download EXE</a>
+
+  <script>
+    const socket = io("http://localhost:5000");
+    const portfolio = {};
+    
+    function addToPortfolio() {
+      const stock = document.getElementById("stockDropdown").value;
+      const quantity = parseInt(document.getElementById("stockQty").value);
+      if (!stock || quantity <= 0) return;
+
+      socket.emit("add_to_portfolio", { stock, quantity });
+    }
+
+    function removeFromPortfolio() {
+      const stock = document.getElementById("stockRemoveDropdown").value;
+      const quantity = parseInt(document.getElementById("removeQty").value);
+      if (!stock || quantity <= 0) return;
+
+      socket.emit("del_from_portfolio", { stock, quantity });
+    }
+
+
+    socket.on("portfolio_update", data => {
+      const { stock, price, quantity, value } = data;
+      portfolio[stock] = { price, quantity, value };
+
+      const table = document.getElementById("portfolioTable");
+      table.innerHTML = "";
+      let total = 0;
+      for (const [sym, val] of Object.entries(portfolio)) {
+        total += val.value;
+        table.innerHTML += `
+          <tr>
+            <td>${sym}</td>
+            <td>${val.quantity}</td>
+            <td>$${val.price}</td>
+            <td>$${val.value}</td>
+          </tr>`;
+      }
+      document.getElementById("portfolioTotal").innerText = `$${total.toFixed(2)}`;
+    });
+
+    socket.on("stock_removed", (data) => {
+      const stock = data.stock;
+      delete portfolio[stock]; // remove from memory
+      redrawPortfolioTable();  // update the UI
+    });
+
+    socket.on("logs", (data) => {
+      const stock = data.stock;
+      const message = data.message;
+      const logDiv = document.getElementById("logContainer");
+      const p = document.createElement("p");
+      p.style.margin = "0 0 5px";
+      p.innerHTML = `<b>${stock}</b>: ${message}`;
+
+      logDiv.appendChild(p);
+      logDiv.scrollTop = logDiv.scrollHeight; // Auto scroll to latest log
+    })
+
+    function redrawPortfolioTable() {
+      const table = document.getElementById("portfolioTable");
+      table.innerHTML = "";
+      let total = 0;
+
+      for (const [sym, val] of Object.entries(portfolio)) {
+        total += val.value;
+        table.innerHTML += `
+          <tr>
+            <td>${sym}</td>
+            <td>${val.quantity}</td>
+            <td>$${val.price}</td>
+            <td>$${val.value}</td>
+          </tr>`;
+      }
+
+      document.getElementById("portfolioTotal").innerText = `$${total.toFixed(2)}`;
+    }
+
+
+    function generateCode() {
+      const code = document.getElementById("code").value;
+      socket.emit("generate_exe", { code });
+    }
+
+    socket.on("status", data => {
+      document.getElementById("status").innerText = data.message;
+    });
+
+    socket.on("completed", data => {
+      document.getElementById("status").innerText = "✅ EXE generated!";
+      const link = document.getElementById("downloadLink");
+      link.href = `/download/${data.exe}`;
+      link.innerText = "Download " + data.exe;
+      link.style.display = "block";
+    });
+
+    socket.on("error", data => {
+      document.getElementById("status").innerText = "❌ " + data.error;
+    });
+  </script>
+</body>
+</html>
